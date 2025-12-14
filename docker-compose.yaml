@@ -16,7 +16,7 @@ services:
 
       # WordPress Configuration
       WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX:-wp_}
-      WORDPRESS_DEBUG: ${WORDPRESS_DEBUG:-false}
+      WORDPRESS_DEBUG: "false"
       WORDPRESS_CONFIG_EXTRA: |
         /* Performance & Security */
         define('WP_MEMORY_LIMIT', '256M');
