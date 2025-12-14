@@ -1,0 +1,243 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║            WORDPRESS FTP PROMPT ISSUE - PERMANENTLY FIXED                  ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+Issue Date: December 14, 2025
+Status: ✅ RESOLVED
+
+═══════════════════════════════════════════════════════════════════════════════
+
+❌ THE PROBLEM
+───────────────────────────────────────────────────────────────────────────────
+
+When trying to upload/delete themes or plugins, WordPress showed:
+
+  "Connection Information
+   To perform the requested action, WordPress needs to access your web server.
+   Please enter your FTP credentials to proceed..."
+
+This happened because:
+  1. WordPress files were not owned by the web server user (www-data)
+  2. WordPress couldn't detect it had write permissions
+  3. FS_METHOD constant was not set in wp-config.php
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ THE SOLUTION (Applied)
+───────────────────────────────────────────────────────────────────────────────
+
+1. Fixed File Ownership
+   • Changed all WordPress files to www-data:www-data
+   • Command: chown -R www-data:www-data /var/www/html
+
+2. Fixed Permissions
+   • Directories: 755 (rwxr-xr-x)
+   • Files: 644 (rw-r--r--)
+
+3. Configured Direct Filesystem Access
+   • Added to wp-config.php: define('FS_METHOD', 'direct');
+   • This tells WordPress it can write directly without FTP
+
+4. Updated Automation Script
+   • fix-wordpress-permissions.sh now includes FS_METHOD fix
+   • Prevents issue from recurring
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ WHAT YOU CAN NOW DO
+───────────────────────────────────────────────────────────────────────────────
+
+✓ Upload themes directly from WordPress admin
+✓ Delete themes directly from WordPress admin
+✓ Install plugins directly from WordPress admin
+✓ Delete plugins directly from WordPress admin
+✓ Update WordPress core directly
+✓ Update themes and plugins directly
+✓ Upload media files without issues
+
+NO FTP REQUIRED! Everything works through the WordPress interface.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔧 VERIFICATION
+───────────────────────────────────────────────────────────────────────────────
+
+Run these commands to verify the fix:
+
+1. Check file ownership:
+   $ docker exec mitalimart-wordpress ls -la /var/www/html | head -10
+
+   Should show: www-data www-data
+
+2. Check FS_METHOD:
+   $ docker exec mitalimart-wordpress grep FS_METHOD /var/www/html/wp-config.php
+
+   Should show: define('FS_METHOD', 'direct');
+
+3. Test in WordPress:
+   • Go to: Appearance → Themes
+   • Try to activate/delete a theme
+   • Should work without FTP prompt!
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🛡️ PREVENTING FUTURE ISSUES
+───────────────────────────────────────────────────────────────────────────────
+
+The fix is permanent, but if you ever encounter this again:
+
+1. Run the automated fix script:
+   $ cd /var/www/mitali-mart
+   $ ./fix-wordpress-permissions.sh
+
+2. Or manually run these commands:
+   $ docker exec mitalimart-wordpress chown -R www-data:www-data /var/www/html
+   $ docker exec mitalimart-wordpress find /var/www/html -type d -exec chmod 755 {} \;
+   $ docker exec mitalimart-wordpress find /var/www/html -type f -exec chmod 644 {} \;
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📚 TECHNICAL DETAILS
+───────────────────────────────────────────────────────────────────────────────
+
+What is FS_METHOD?
+
+WordPress uses FS_METHOD to determine how to write to the filesystem:
+  • 'direct' - Write directly (fastest, requires proper permissions)
+  • 'ssh2' - Use SSH2 extension
+  • 'ftpext' - Use FTP extension (prompts for credentials)
+  • 'ftpsockets' - Use FTP sockets
+
+By setting FS_METHOD to 'direct' and ensuring proper permissions,
+WordPress can modify files without additional authentication.
+
+File Permissions Explained:
+
+755 (rwxr-xr-x) for directories:
+  • Owner (www-data): read, write, execute
+  • Group: read, execute
+  • Others: read, execute
+
+644 (rw-r--r--) for files:
+  • Owner (www-data): read, write
+  • Group: read only
+  • Others: read only
+
+These permissions are secure while allowing WordPress to function properly.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔄 AFTER CONTAINER RESTART
+───────────────────────────────────────────────────────────────────────────────
+
+The fix persists because:
+
+1. wp-config.php is stored in the wp-data volume
+   • FS_METHOD configuration is permanent
+
+2. WordPress container automatically sets correct ownership
+   • Docker entrypoint handles this on startup
+
+3. If issues occur after restart:
+   • Run ./fix-wordpress-permissions.sh
+   • This ensures everything is set correctly
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 TESTING THE FIX
+───────────────────────────────────────────────────────────────────────────────
+
+1. Login to WordPress admin:
+   https://mitalimart.com/wp-admin
+
+2. Go to: Appearance → Themes
+
+3. Try these actions (all should work without FTP prompt):
+   ✓ Add New Theme
+   ✓ Upload Theme (zip file)
+   ✓ Activate Theme
+   ✓ Delete Theme
+
+4. Go to: Plugins → Add New
+
+5. Try these actions:
+   ✓ Install Plugin
+   ✓ Activate Plugin
+   ✓ Delete Plugin
+
+6. Go to: Dashboard → Updates
+
+7. Try:
+   ✓ Update WordPress
+   ✓ Update Plugins
+   ✓ Update Themes
+
+All should work WITHOUT any FTP credential prompts!
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📝 SUMMARY OF CHANGES
+───────────────────────────────────────────────────────────────────────────────
+
+Files Modified:
+  ✓ /var/www/html/* (ownership and permissions)
+  ✓ /var/www/html/wp-config.php (added FS_METHOD)
+  ✓ fix-wordpress-permissions.sh (updated to include FS_METHOD)
+
+What Changed:
+  • All WordPress files now owned by www-data
+  • Added define('FS_METHOD', 'direct'); to wp-config.php
+  • Set proper file permissions (755 for dirs, 644 for files)
+  • Updated automation script for future use
+
+Result:
+  ✅ WordPress can now manage files directly
+  ✅ No FTP credentials required
+  ✅ Theme/plugin management works seamlessly
+  ✅ Updates work without prompts
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🆘 TROUBLESHOOTING
+───────────────────────────────────────────────────────────────────────────────
+
+If FTP prompt still appears:
+
+1. Clear WordPress cache:
+   • Install WP Super Cache or similar
+   • Clear all caches
+   • Or: delete /wp-content/cache/* directory
+
+2. Verify permissions again:
+   $ ./fix-wordpress-permissions.sh
+
+3. Check wp-config.php:
+   $ docker exec mitalimart-wordpress grep FS_METHOD /var/www/html/wp-config.php
+
+   If not found, add manually:
+   $ docker exec mitalimart-wordpress sh -c "sed -i \"/That's all, stop editing!/i define('FS_METHOD', 'direct');\" /var/www/html/wp-config.php"
+
+4. Restart WordPress container:
+   $ docker restart mitalimart-wordpress
+
+5. Clear browser cache and try again
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📞 RELATED DOCUMENTATION
+───────────────────────────────────────────────────────────────────────────────
+
+• fix-wordpress-permissions.sh - Automated fix script
+• DEPLOYMENT-SUCCESS.txt - Overall deployment guide
+• SECURITY-README.txt - Security configuration
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ ISSUE STATUS: RESOLVED
+
+The FTP prompt will no longer appear when managing themes, plugins, or updates.
+WordPress now has direct filesystem access with proper permissions.
+
+═══════════════════════════════════════════════════════════════════════════════
+Last Updated: December 14, 2025
+

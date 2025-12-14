@@ -159,11 +159,20 @@ services:
       - "traefik.http.routers.pma-mitalimart-http.entrypoints=http"
       - "traefik.http.routers.pma-mitalimart-http.middlewares=redirect-to-https@docker"
 
-      # HTTPS Router
+      # HTTPS Router (with BasicAuth)
       - "traefik.http.routers.pma-mitalimart.rule=Host(`pma.mitalimart.com`)"
       - "traefik.http.routers.pma-mitalimart.entrypoints=https"
       - "traefik.http.routers.pma-mitalimart.tls=true"
       - "traefik.http.routers.pma-mitalimart.tls.certresolver=cloudflare"
+      - "traefik.http.routers.pma-mitalimart.middlewares=pma-auth@docker"
+
+      # BasicAuth Middleware (protects PHPMyAdmin with username/password)
+      # Default: admin / changeme123
+      # To generate new password: echo $(htpasswd -nB admin) | sed -e s/\\$/\\$\\$/g
+      - "traefik.http.middlewares.pma-auth.basicauth.users=admin:$$2y$$05$$qF7JRo/cqxFvhXZLKGvb0.zGvNQ8vkN8p0kD8GqK8mYE.L7iQqH0m"
+
+      # Optional: Custom realm name
+      - "traefik.http.middlewares.pma-auth.basicauth.realm=PHPMyAdmin Access - Authorized Only"
 
       # Service
       - "traefik.http.services.pma-mitalimart.loadbalancer.server.port=80"

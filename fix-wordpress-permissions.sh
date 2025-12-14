@@ -70,18 +70,18 @@ echo ""
 echo -e "${BLUE}🔧 Fixing WordPress Permissions...${NC}"
 echo ""
 
-# Fix ownership
-echo -e "${BLUE}📂 Step 1/4: Setting correct ownership (www-data:www-data)...${NC}"
-if docker exec "$WP_CONTAINER" chown -R www-data:www-data /var/www/html/wp-content 2>/dev/null; then
-    echo -e "${GREEN}✓ Ownership updated successfully${NC}"
+# Fix ownership for entire WordPress directory
+echo -e "${BLUE}📂 Step 1/5: Setting correct ownership for entire WordPress directory...${NC}"
+if docker exec "$WP_CONTAINER" chown -R www-data:www-data /var/www/html 2>/dev/null; then
+    echo -e "${GREEN}✓ Ownership updated successfully (all WordPress files)${NC}"
 else
     echo -e "${RED}✗ Failed to change ownership${NC}"
 fi
 echo ""
 
 # Fix directory permissions
-echo -e "${BLUE}📁 Step 2/4: Setting directory permissions (755)...${NC}"
-if docker exec "$WP_CONTAINER" find /var/www/html/wp-content -type d -exec chmod 755 {} \; 2>/dev/null; then
+echo -e "${BLUE}📁 Step 2/5: Setting directory permissions (755)...${NC}"
+if docker exec "$WP_CONTAINER" find /var/www/html -type d -exec chmod 755 {} \; 2>/dev/null; then
     echo -e "${GREEN}✓ Directory permissions set to 755 (rwxr-xr-x)${NC}"
 else
     echo -e "${YELLOW}⚠ Could not set all directory permissions${NC}"
@@ -89,16 +89,29 @@ fi
 echo ""
 
 # Fix file permissions
-echo -e "${BLUE}📄 Step 3/4: Setting file permissions (644)...${NC}"
-if docker exec "$WP_CONTAINER" find /var/www/html/wp-content -type f -exec chmod 644 {} \; 2>/dev/null; then
+echo -e "${BLUE}📄 Step 3/5: Setting file permissions (644)...${NC}"
+if docker exec "$WP_CONTAINER" find /var/www/html -type f -exec chmod 644 {} \; 2>/dev/null; then
     echo -e "${GREEN}✓ File permissions set to 644 (rw-r--r--)${NC}"
 else
     echo -e "${YELLOW}⚠ Could not set all file permissions${NC}"
 fi
 echo ""
 
+# Fix WordPress direct filesystem access (prevents FTP prompt)
+echo -e "${BLUE}⚙️  Step 4/5: Configuring direct filesystem access...${NC}"
+if docker exec "$WP_CONTAINER" grep -q "FS_METHOD" /var/www/html/wp-config.php 2>/dev/null; then
+    echo -e "${GREEN}✓ FS_METHOD already configured${NC}"
+else
+    if docker exec "$WP_CONTAINER" sh -c "sed -i \"/\\/\\* That's all, stop editing!/i define('FS_METHOD', 'direct');\" /var/www/html/wp-config.php" 2>/dev/null; then
+        echo -e "${GREEN}✓ FS_METHOD set to 'direct' (FTP prompt disabled)${NC}"
+    else
+        echo -e "${YELLOW}⚠ Could not set FS_METHOD${NC}"
+    fi
+fi
+echo ""
+
 # Ensure critical directories exist and are writable
-echo -e "${BLUE}📤 Step 4/4: Ensuring critical directories exist...${NC}"
+echo -e "${BLUE}📤 Step 5/5: Ensuring critical directories exist...${NC}"
 
 # Create and fix uploads directory
 if docker exec "$WP_CONTAINER" sh -c "mkdir -p /var/www/html/wp-content/uploads && chown www-data:www-data /var/www/html/wp-content/uploads && chmod 755 /var/www/html/wp-content/uploads" 2>/dev/null; then
