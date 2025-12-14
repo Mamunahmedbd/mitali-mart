@@ -1,0 +1,98 @@
+version: "3.8"
+
+services:
+  # =============================
+  # REVERSE PROXY (AUTO HTTPS)
+  # =============================
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    container_name: nginx-proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ./certs:/etc/nginx/certs
+      - ./vhost.d:/etc/nginx/vhost.d
+      - ./html:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/my_proxy.conf:ro
+    networks:
+      - proxy-tier
+
+  letsencrypt:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    container_name: letsencrypt
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./certs:/etc/nginx/certs
+      - ./vhost.d:/etc/nginx/vhost.d
+      - ./html:/usr/share/nginx/html
+    environment:
+      NGINX_PROXY_CONTAINER: nginx-proxy
+    depends_on:
+      - nginx-proxy
+    networks:
+      - proxy-tier
+
+  # =============================
+  # WORDPRESS FPM (FAST & SECURE)
+  # =============================
+  wordpress:
+    image: wordpress:php8.2-fpm-alpine
+    container_name: wordpress
+    restart: always
+    depends_on:
+      - db
+    env_file: .env
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: ${MYSQL_USER}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+
+      # AUTO SSL + DOMAIN
+      VIRTUAL_HOST: ${DOMAIN}
+      LETSENCRYPT_HOST: ${DOMAIN}
+      LETSENCRYPT_EMAIL: ${EMAIL}
+
+    volumes:
+      - wp-data:/var/www/html
+    networks:
+      - proxy-tier
+      - app-tier
+
+  # =============================
+  # PHPMYADMIN (OPTIONAL)
+  # =============================
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    restart: always
+    depends_on:
+      - db
+    environment:
+      VIRTUAL_HOST: pma.${DOMAIN}
+      LETSENCRYPT_HOST: pma.${DOMAIN}
+      LETSENCRYPT_EMAIL: ${EMAIL}
+      PMA_HOST: db
+      PMA_USER: ${MYSQL_USER}
+      PMA_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - proxy-tier
+      - app-tier
+
+# =============================
+# VOLUMES & NETWORKS
+# =============================
+volumes:
+  wp-data:
+  db-data:
+  certs:
+  html:
+  vhost.d:
+
+networks:
+  proxy-tier:
+  app-tier:

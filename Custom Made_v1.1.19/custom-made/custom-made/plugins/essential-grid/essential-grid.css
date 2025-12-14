@@ -1,0 +1,90 @@
+/* Essential Grid styles
+----------------------------------------------------------------- */
+
+.flat-light .esg-filters .esg-sortbutton-order,
+.flat-light .esg-filters .esg-cartbutton-order {
+	line-height:36px;
+	margin:0;
+}
+.flat-light .esg-filters .esg-sortbutton {
+	padding-right: 0;
+}
+
+
+/* Wine list */
+.esg-grid .eg-winelist-content {
+	border: none;
+	padding:0.1em 2em 1.5em;
+}
+.esg-grid .eg-winelist-element-0 {
+	margin-top: 0.2em;
+	line-height:1.15em;
+}
+.esg-grid .eg-winelist-element-25 {
+	padding:0;
+	margin-top:0.2em;
+}
+
+
+.custom-made .esg-grid .esg-filterbutton {
+    display: block;
+    float: left;
+    padding: 5px 13px 6px 13px;
+    margin: 0 4px 4px 0;
+    font-size: 10px !important;
+    font-family: Lato;
+    line-height: 18px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    border: 1px solid;
+    border-radius: 0;
+    box-shadow: none !important;
+	-webkit-transition: all 0.3s ease;
+    -moz-transition: all 0.3s ease;
+    -ms-transition: all 0.3s ease;
+    -o-transition: all 0.3s ease;
+    transition: all 0.3s ease;
+}
+.custom-made .esg-grid .esg-navigationbutton.esg-loadmore {
+    cursor: pointer;
+    display: inline-block;
+    text-transform: uppercase;
+    white-space: nowrap;
+    padding: 1.334em 2.554em;
+    border: 2px solid;
+    border-radius: 0;
+    font-family: Lato;
+    font-size: 0.833rem;
+    line-height: 1em;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+	 margin-top: 3.4em;
+	-webkit-transition: all 0.3s ease;
+    -moz-transition: all 0.3s ease;
+    -ms-transition: all 0.3s ease;
+    -o-transition: all 0.3s ease;
+    transition: all 0.3s ease;
+}
+.esgbox-overlay{
+    z-index: 10000 !important;
+}
+.esgbox-opened {
+    z-index: 10001 !important;
+}
+.custom-made .esg-grid .esg-starring .star-rating, 
+.custom-made .esg-grid .esg-starring-page .star-rating {
+    width: 6.3em;
+    letter-spacing: 0.25em;
+}
+
+.custom-made .esg-grid .esg-filterbutton{
+    min-height: 20px;
+}
+
+.esg-grid-wrap-container a > p {
+    margin-bottom: 0;
+}

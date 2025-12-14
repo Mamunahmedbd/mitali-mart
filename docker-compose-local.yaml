@@ -1,0 +1,48 @@
+---
+services:
+  # =============================
+  # WORDPRESS FPM (FAST & SECURE)
+  # =============================
+  wordpress:
+    image: wordpress:php8.2-apache
+    container_name: wordpress
+    restart: always
+    ports:
+      - "8080:80"
+    env_file: .env
+    environment:
+      WORDPRESS_DB_HOST: mariadb-database:3306
+      WORDPRESS_DB_USER: ${MYSQL_USER}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+    volumes:
+      - wp-data:/var/www/html
+      - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
+    networks:
+      - app-tier
+
+  # =============================
+  # PHPMYADMIN (OPTIONAL)
+  # =============================
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    restart: always
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: mariadb-database
+      PMA_USER: ${MYSQL_USER}
+      PMA_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - app-tier
+
+# =============================
+# VOLUMES & NETWORKS
+# =============================
+volumes:
+  db-data:
+  wp-data:
+
+networks:
+  app-tier:
