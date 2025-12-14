@@ -1,118 +1,10 @@
 services:
   # =============================
-  # REVERSE PROXY (AUTO HTTPS)
-  # =============================
-  nginx-proxy:
-    image: jwilder/nginx-proxy:latest
-    container_name: nginx-proxy
-    restart: unless-stopped
-    ports:
-      - "801:80"
-      - "4431:443"
-    volumes:
-      - /var/run/docker.sock:/tmp/docker.sock:ro
-      - ./certs:/etc/nginx/certs:ro
-      - ./vhost.d:/etc/nginx/vhost.d
-      - ./html:/usr/share/nginx/html
-      - ./nginx.conf:/etc/nginx/conf.d/my_proxy.conf:ro
-    environment:
-      - DEFAULT_HOST=${DOMAIN}
-      - TRUST_DOWNSTREAM_PROXY=false
-    networks:
-      - proxy-tier
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 128M
-    labels:
-      - "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy"
-
-  letsencrypt:
-    image: jrcs/letsencrypt-nginx-proxy-companion:latest
-    container_name: letsencrypt
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./certs:/etc/nginx/certs:rw
-      - ./vhost.d:/etc/nginx/vhost.d
-      - ./html:/usr/share/nginx/html
-      - ./acme.sh:/etc/acme.sh
-    environment:
-      NGINX_PROXY_CONTAINER: nginx-proxy
-      DEFAULT_EMAIL: ${EMAIL}
-      ACME_CA_URI: https://acme-v02.api.letsencrypt.org/directory
-    depends_on:
-      - nginx-proxy
-    networks:
-      - proxy-tier
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 128M
-        reservations:
-          cpus: '0.05'
-          memory: 64M
-
-  # =============================
-  # NGINX WEB SERVER FOR WORDPRESS
-  # =============================
-  nginx:
-    image: nginx:alpine
-    container_name: nginx-wordpress
-    restart: unless-stopped
-    depends_on:
-      - wordpress
-    volumes:
-      - wp-data:/var/www/html:ro
-      - ./nginx-wordpress.conf:/etc/nginx/nginx.conf:ro
-    environment:
-      VIRTUAL_HOST: ${DOMAIN}
-      LETSENCRYPT_HOST: ${DOMAIN}
-      LETSENCRYPT_EMAIL: ${EMAIL}
-    networks:
-      - proxy-tier
-      - app-tier
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "5"
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/wp-login.php"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # =============================
-  # WORDPRESS FPM (FAST & SECURE)
+  # WORDPRESS WITH APACHE (SIMPLE & WORKS WITH TRAEFIK)
   # =============================
   wordpress:
-    image: wordpress:php8.2-fpm-alpine
-    container_name: wordpress
+    image: wordpress:php8.2-apache
+    container_name: mitalimart-wordpress
     restart: unless-stopped
     env_file: .env
     environment:
@@ -131,27 +23,21 @@ services:
         define('WP_MAX_MEMORY_LIMIT', '512M');
         define('DISABLE_WP_CRON', true);
         define('DISALLOW_FILE_EDIT', true);
-        define('DISALLOW_FILE_MODS', false);
-        define('AUTOMATIC_UPDATER_DISABLED', false);
-        define('WP_AUTO_UPDATE_CORE', 'minor');
-
-        /* Security Headers */
-        @ini_set('log_errors', 'On');
-        @ini_set('display_errors', 'Off');
-        @ini_set('error_log', '/var/log/php_errors.log');
-
-        /* Redis Cache (if needed) */
         define('WP_CACHE', ${ENABLE_CACHE:-false});
 
         /* Force SSL */
         if (isset($$_SERVER['HTTP_X_FORWARDED_PROTO']) && $$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
           $$_SERVER['HTTPS'] = 'on';
         }
+
+        /* Security */
+        @ini_set('log_errors', 'On');
+        @ini_set('display_errors', 'Off');
     volumes:
       - wp-data:/var/www/html
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
-      - ./php-custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
     networks:
+      - proxy  # Traefik network
       - app-tier
     external_links:
       - mariadb:mariadb
@@ -169,18 +55,38 @@ services:
           cpus: '0.5'
           memory: 512M
     healthcheck:
-      test: ["CMD-SHELL", "php-fpm-healthcheck || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost/wp-login.php"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+    labels:
+      - "traefik.enable=true"
+
+      # HTTP Router (redirect to HTTPS)
+      - "traefik.http.routers.mitalimart-http.rule=Host(`mitalimart.com`) || Host(`www.mitalimart.com`)"
+      - "traefik.http.routers.mitalimart-http.entrypoints=http"
+      - "traefik.http.routers.mitalimart-http.middlewares=redirect-to-https@docker"
+
+      # HTTPS Router
+      - "traefik.http.routers.mitalimart.rule=Host(`mitalimart.com`) || Host(`www.mitalimart.com`)"
+      - "traefik.http.routers.mitalimart.entrypoints=https"
+      - "traefik.http.routers.mitalimart.tls=true"
+      - "traefik.http.routers.mitalimart.tls.certresolver=cloudflare"
+
+      # Service
+      - "traefik.http.services.mitalimart.loadbalancer.server.port=80"
+
+      # Middleware for redirect
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
 
   # =============================
   # WORDPRESS CRON (BACKGROUND JOBS)
   # =============================
   wordpress-cron:
-    image: wordpress:php8.2-fpm-alpine
-    container_name: wordpress-cron
+    image: wordpress:php8.2-apache
+    container_name: mitalimart-cron
     restart: unless-stopped
     env_file: .env
     environment:
@@ -194,11 +100,13 @@ services:
       - app-tier
     external_links:
       - mariadb:mariadb
-    entrypoint: /bin/sh
+    entrypoint: /bin/bash
     command: >
       -c "
+      apt-get update && apt-get install -y wget;
+      cd /var/www/html;
       while true; do
-        wp cron event run --due-now --path=/var/www/html --allow-root 2>&1 | tee -a /var/log/wp-cron.log;
+        wget -q -O - http://wordpress/wp-cron.php?doing_wp_cron >/dev/null 2>&1;
         sleep 300;
       done
       "
@@ -210,37 +118,26 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
+          cpus: '0.25'
           memory: 128M
 
   # =============================
-  # PHPMYADMIN (OPTIONAL - DISABLE IN PRODUCTION)
+  # PHPMYADMIN
   # =============================
   phpmyadmin:
     image: phpmyadmin/phpmyadmin:latest
-    container_name: phpmyadmin
+    container_name: mitalimart-phpmyadmin
     restart: unless-stopped
     environment:
-      VIRTUAL_HOST: pma.${DOMAIN}
-      LETSENCRYPT_HOST: pma.${DOMAIN}
-      LETSENCRYPT_EMAIL: ${EMAIL}
       PMA_HOST: mariadb
       PMA_USER: ${MYSQL_USER}
       PMA_PASSWORD: ${MYSQL_PASSWORD}
-      PMA_ABSOLUTE_URI: https://pma.${DOMAIN}
-
-      # Security Settings
+      PMA_ABSOLUTE_URI: https://pma.mitalimart.com
       UPLOAD_LIMIT: 50M
       MEMORY_LIMIT: 512M
-      MAX_EXECUTION_TIME: 600
-
-      # Hide certain databases
       PMA_HIDE_DB: "(information_schema|performance_schema|mysql|phpmyadmin)"
     networks:
-      - proxy-tier
+      - proxy  # Traefik network
       - app-tier
     external_links:
       - mariadb:mariadb
@@ -254,12 +151,22 @@ services:
         limits:
           cpus: '0.5'
           memory: 512M
-        reservations:
-          cpus: '0.1'
-          memory: 256M
-    # Uncomment to disable PHPMyAdmin in production
-    # profiles:
-    #   - debug
+    labels:
+      - "traefik.enable=true"
+
+      # HTTP Router
+      - "traefik.http.routers.pma-mitalimart-http.rule=Host(`pma.mitalimart.com`)"
+      - "traefik.http.routers.pma-mitalimart-http.entrypoints=http"
+      - "traefik.http.routers.pma-mitalimart-http.middlewares=redirect-to-https@docker"
+
+      # HTTPS Router
+      - "traefik.http.routers.pma-mitalimart.rule=Host(`pma.mitalimart.com`)"
+      - "traefik.http.routers.pma-mitalimart.entrypoints=https"
+      - "traefik.http.routers.pma-mitalimart.tls=true"
+      - "traefik.http.routers.pma-mitalimart.tls.certresolver=cloudflare"
+
+      # Service
+      - "traefik.http.services.pma-mitalimart.loadbalancer.server.port=80"
 
 # =============================
 # VOLUMES & NETWORKS
@@ -267,16 +174,9 @@ services:
 volumes:
   wp-data:
     driver: local
-  certs:
-    driver: local
-  html:
-    driver: local
-  vhost.d:
-    driver: local
 
 networks:
-  proxy-tier:
-    driver: bridge
+  proxy:
+    external: true  # Use Traefik's network
   app-tier:
     driver: bridge
-    internal: false
