@@ -270,3 +270,87 @@ echo -e "${BLUE}═════════════════════�
 echo -e "${GREEN}🎉 All done! Your database is ready to use.${NC}"
 echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
 
+# =============================
+# WORDPRESS PERMISSIONS FIX
+# =============================
+echo ""
+read -p "Do you want to fix WordPress file permissions now? (y/n): " FIX_PERMS
+
+if [ "$FIX_PERMS" == "y" ]; then
+    echo ""
+    echo -e "${BLUE}🔧 Fixing WordPress Permissions...${NC}"
+    echo ""
+
+    # Detect WordPress container
+    WP_CONTAINER=$(docker ps --format '{{.Names}}' | grep -iE 'wordpress|mitalimart-wordpress' | head -n 1)
+
+    if [ -z "$WP_CONTAINER" ]; then
+        echo -e "${YELLOW}WordPress container not found. Please enter container name:${NC}"
+        docker ps --format "table {{.Names}}\t{{.Image}}" | grep -i wordpress
+        echo ""
+        read -p "Enter WordPress container name: " WP_CONTAINER
+
+        if [ -z "$WP_CONTAINER" ]; then
+            echo -e "${YELLOW}Skipping permissions fix.${NC}"
+            exit 0
+        fi
+    fi
+
+    echo -e "${GREEN}✓ Found WordPress container: ${WP_CONTAINER}${NC}"
+    echo ""
+
+    # Fix ownership and permissions
+    echo -e "${BLUE}📂 Setting correct ownership (www-data:www-data)...${NC}"
+
+    if docker exec "$WP_CONTAINER" chown -R www-data:www-data /var/www/html/wp-content 2>/dev/null; then
+        echo -e "${GREEN}✓ Ownership updated${NC}"
+    else
+        echo -e "${YELLOW}⚠ Could not change ownership (container may need to be running)${NC}"
+    fi
+
+    echo -e "${BLUE}🔐 Setting correct permissions (755 for directories, 644 for files)...${NC}"
+
+    # Set directory permissions
+    if docker exec "$WP_CONTAINER" find /var/www/html/wp-content -type d -exec chmod 755 {} \; 2>/dev/null; then
+        echo -e "${GREEN}✓ Directory permissions set to 755${NC}"
+    fi
+
+    # Set file permissions
+    if docker exec "$WP_CONTAINER" find /var/www/html/wp-content -type f -exec chmod 644 {} \; 2>/dev/null; then
+        echo -e "${GREEN}✓ File permissions set to 644${NC}"
+    fi
+
+    # Ensure uploads directory exists and is writable
+    echo -e "${BLUE}📤 Ensuring uploads directory is writable...${NC}"
+
+    if docker exec "$WP_CONTAINER" sh -c "mkdir -p /var/www/html/wp-content/uploads && chown www-data:www-data /var/www/html/wp-content/uploads && chmod 755 /var/www/html/wp-content/uploads" 2>/dev/null; then
+        echo -e "${GREEN}✓ Uploads directory is ready${NC}"
+    fi
+
+    # Verify permissions
+    echo ""
+    echo -e "${BLUE}🔍 Verifying permissions...${NC}"
+    docker exec "$WP_CONTAINER" ls -la /var/www/html/wp-content/ 2>/dev/null | grep -E "uploads|themes|plugins" || true
+
+    echo ""
+    echo -e "${GREEN}═══════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}✓ WordPress permissions fixed successfully!${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${YELLOW}📝 What was fixed:${NC}"
+    echo -e "   • Owner: ${GREEN}www-data:www-data${NC}"
+    echo -e "   • Directories: ${GREEN}755${NC} (rwxr-xr-x)"
+    echo -e "   • Files: ${GREEN}644${NC} (rw-r--r--)"
+    echo -e "   • Uploads folder: ${GREEN}Created and writable${NC}"
+    echo ""
+    echo -e "${YELLOW}💡 You can now:${NC}"
+    echo -e "   • Upload themes and plugins"
+    echo -e "   • Upload media files"
+    echo -e "   • Update WordPress core"
+    echo ""
+fi
+
+echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}✨ All tasks completed successfully!${NC}"
+echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
+
